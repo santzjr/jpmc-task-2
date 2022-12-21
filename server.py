@@ -241,6 +241,59 @@ def run(routes, host='0.0.0.0', port=8080):
     server.shutdown()
     server.start()
     server.waitForThread()
+    
+    def simulate(host='localhost', port=8080):
+    """ Continuously send requests to the server, receive responses,
+        parse the data, and update the graph with the new data.
+    """
+    # Initialize data structure to store stock data
+    stock_data = []
+    
+    # Initialize graph using matplotlib
+    fig, ax = plt.subplots()
+    
+    # Set up HTTP server to serve current state of order book
+    class OrderBookRequestHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(book).encode())
+    
+    server = HTTPServer((host, port), OrderBookRequestHandler)
+    
+    # Set up thread to continuously send requests to server
+    def send_requests():
+        while True:
+            # Send request to server
+            response = urllib.request.urlopen(QUERY.format(random.random())).read()
+            
+            # Parse response from server
+            quotes = json.loads(response)
+            
+            # Extract relevant data from each quote and store it in data structure
+            for quote in quotes:
+                stock = quote['stock']
+                timestamp = dateutil.parser.parse(quote['timestamp'])
+                top_ask_price = float(quote['top_ask']['price'])
+                stock_data.append((timestamp, top_ask_price))
+            
+            # Update graph with new data
+            x, y = zip(*stock_data)  # Unzip data into separate lists for x and y axes
+            ax.plot(x, y)
+            fig.canvas.draw()
+            
+            # Sleep for a short time before sending the next request
+                       time.sleep(1)  # Sleep for 1 second before sending the next request
+    
+    # Start thread to send requests
+    thread = threading.Thread(target=send_requests)
+    thread.start()
+    
+    # Run HTTP server to serve current state of order book
+    server.serve_forever()
+
+
 
 
 ################################################################################
